@@ -38,3 +38,25 @@ Run loop: collision → wall BCs → streaming → inlet/outlet → macros → d
 
 Usage notes:
 Start with the provided driver PulsatileBloodFlow2D(); open the generated sol_*.vtk in ParaView to inspect pressure/velocity fields and the evolving lumen. Adjust compliance α, relaxation time τ, and pressure waveform to explore different Womersley/Reynolds regimes and severed vs. intact vessel scenarios.
+
+
+
+How to build & run (Linux)
+
+In the project’s main folder, make the script executable:
+
+chmod +x compile.sh
+
+
+Compile:
+
+./compile.sh
+
+
+Run the executable (generated in the out/ folder):
+
+cd out
+./COOLBM
+
+
+Notes: This code is based on the CooLBM platform and is CPU-parallelized (C++17 std::execution::par_unseq). Open the generated sol_*.vtk files in ParaView to visualize pressure/velocity fields and wall motion.
