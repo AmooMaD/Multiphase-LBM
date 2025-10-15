@@ -1,0 +1,14 @@
+# domain & run
+N         128
+tf        10000
+out_freq  1000
+vtk_freq  1000
+
+# material / model (match the Fortran SHARE defaults)
+Sigma     0.01
+W         4.0
+M         0.02
+RhoL      0.001
+RhoH      1.0
+tau       0.8
+
