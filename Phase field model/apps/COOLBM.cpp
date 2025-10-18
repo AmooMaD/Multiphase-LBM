@@ -69,7 +69,6 @@
 //#include "Flow_2D_SRT_ParticleDeposition.h"
 //#include "Particle_2D_SRT_ParticleDeposition.h"
 //#include "contactAngle2D.h"
-#include "laplace2D.h"
 #include "laplace3D.h"
 #include "twoLayeredFlow2D.h"
 
@@ -101,10 +100,7 @@ int main() {
     if (problem == "rayleighTaylor2D") {
         rayleighTaylor2D();
     }
-    if( problem == "laplace2D"){
-        laplace2D();
-    }
-
+    
     if (problem == "twoLayered2D") {
         twoLayered2D();
     }
