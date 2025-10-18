@@ -1,6 +1,6 @@
-PulsatileBloodFlow2D (CooLBM-based, CPU-parallel)
+CooLBM-based, CPU-parallel
 
-This module simulates pulsatile blood flow in a deformable 2-D vessel using a D2Q9 Lattice Boltzmann Method (LBM) built on the CooLBM platform. The flow solver supports BGK or MRT collision, curved moving walls, and pulsatile inlet/outlet pressures. It is CPU-parallelized using C++17 parallel algorithms (std::for_each with std::execution::par_unseq).
+This module simulates pulsatile blood flow in a deformable 2-D vessel - Rayleigh Taylor instability - Droplet immersed in gas - layered two-phase flow and contact angle test case using a D2Q9 and D3Q19 Lattice Boltzmann Method (LBM) built on the CooLBM platform. The flow solver supports BGK or MRT collision, curved moving walls, and pulsatile inlet/outlet pressures. It is CPU-parallelized using C++17 parallel algorithms (std::for_each with std::execution::par_unseq).
 
 What it solves
 
