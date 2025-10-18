@@ -1,0 +1,1859 @@
+
+
+NOTES:
+
+! 1. The whole project is composed of head.inc, main.for,
+
+! streamcollision.for, force.for, and output.for.
+
+! 2. head.inc is a header file, where some common blocks are defined.
+
+! 3. In the file: ‘params.in’ is a file you can put the critical
+
+! parameters.
+
+! Do not include “c=======..." in the file. The file begins with a
+
+! parameter.
+
+! 4. Before running this project, please create a new sub-folder
+
+! ‘out’
+
+! under the working directory.
+
+! 5. Here C-S EOS is given as an example. The other EOS can be
+
+! included similarly.
+
+! 6. Please create a new folder ’out’ in the working directory
+
+! before running the code
+
+head.inc:
+
+c==========================================================
+
+! Domain size is lx \times ly \times \lz
+
+integer lx,ly,lz
+
+PARAMETER(lx=51,ly=51,lz=41)
+
+common/AA/ G,tau,Gads(2),ex(0:18),ey(0:18),ez(0:18),opp(18)
+
+real*8 G,tau,Gads
+
+integer ex,ey,ez, opp
+
+common/b/ error,vel,xc(0:18),yc(0:18),zc(0:18),t_k(0:18)
+
+real*8 error,vel,xc,yc,zc,t_k
+
+common/vel/ c_squ,cc,TT0,rho_w,Ca,RR, Nwri
+
+real*8 c_squ,cc,TT0, rho_w, Ca,RR
+
+integer Nwri
+
+common/app/ t_0,t_1,t_2, rho_h, rho_l
+
+real*8 t_0,t_1,t_2, rho_h, rho_l
+
+main.for
+
+c===========================================================
+
+program D3Q19LBM
+
+implicit none
+
+include "head.inc"
+
+integer t_max,time,k
+
+! This array defines which lattice positions are occupied by fluid
+
+! nodes (obst=0)
+
+! or solid nodes (obst=1)
+
+integer obst(lx,ly,lz)
+
+! Velocity components
+
+real*8 u_x(lx,ly,lz),u_y(lx,ly,lz), u_z(lx,ly,lz)
+
+! Pressure and density
+
+real*8 p(lx,ly,lz),rho(lx,ly,lz)
+
+
+! The real fluid density
+
+! which may differ from the velocity components in the above; refer
+
+!
+
+to SC model
+
+real*8 upx(lx,ly,lz),upy(lx,ly,lz),upz(lx,ly,lz)
+
+! The force components: Fx, Fy, Fz for the interaction between
+
+!
+
+fluid nodes.
+
+! Sx, Sy, Sz are the interaction (components) between the fluid nodes
+
+!
+
+and solid nodes
+
+! ff is the distribution function
+
+real*8 ff(0:18,lx,ly,lz),Fx(lx,ly,lz),Fy(lx,ly,lz),
+
+&
+
+Fz(lx,ly,lz), Sx(lx,ly,lz),Sy(lx,ly,lz), Sz(lx,ly,lz)
+
+! TT0W is the value of T/T0;
+
+RHW and RLW are the coexisting
+
+!
+
+densities
+
+! in the specified T/T0.
+
+! For initialization, \rho_l (lower density)
+
+! and \rho_h (higher density) are supposed to be known.
+
+real*8
+
+TT0W(12), RHW(12), RLW(12)
+
+!-------------------------------------------
+
+! Author: Haibo Huang, Huanghb@ustc.edu.cn
+
+!-------------------------------------------
+
+! The below data define the D3Q19 velocity model, xc(ex), yc(ey),
+
+!
+
+zc(ez)
+
+! are the components of e_{ix}, e_{iy}, and e_{iz}, respectively.
+
+data xc/0.d0, 1.d0, -1.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, 1.d0,
+
+& -1.d0, -1.d0, 1.d0, -1.d0, 1.d0, -1.d0, 0.d0, 0.d0,
+
+& 0.d0, 0.d0 /,
+
+&
+
+yc/0.d0, 0.d0, 0.d0, 1.d0, -1.0d0, 0.d0, 0.d0, 1.d0, -1.d0,
+
+& 1.d0, -1.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, 1.d0,
+
+& -1.d0, -1.d0/,
+
+&
+
+zc/0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, -1.d0, 0.d0, 0.d0,
+
+& 0.d0, 0.d0, 1.d0, 1.d0, -1.d0, -1.d0, 1.d0, -1.d0,
+
+& 1.d0, -1.d0/
+
+data ex/0, 1, -1, 0, 0, 0, 0, 1, 1, -1, -1, 1, -1, 1, -1, 0, 0,
+
+& 0, 0 /,
+
+&
+
+ey/0, 0, 0, 1, -1, 0, 0, 1, -1, 1, -1, 0, 0, 0, 0, 1, 1,
+
+& -1, -1/,
+
+&
+
+ez/0, 0, 0, 0, 0, 1, -1, 0, 0, 0, 0, 1, 1, -1, -1, 1, -1,
+
+& 1, -1/
+
+! This array gives the opposite direction for e_1, e_2, e_3,
+
+!
+
+.....e_18
+
+! It implements the simple bounce-back rule we use in the collision
+
+!
+
+step
+
+! for solid nodes (obst=1)
+
+data opp/2,1,4,3,6,5,10,9,8,7,14,13,12,11,18,17,16,15/
+
+! C-S EOS
+
+! RHW and RLW are the coexisting densities in the corresponding
+
+!
+
+specified T/T0.
+
+data TT0W/0.975d0, 0.95d0, 0.925d0, 0.9d0, 0.875d0, 0.85d0,
+
+&
+
+0.825d0, 0.8d0, 0.775d0, 0.75d0, 0.7d0, 0.65d0 /,
+
+&
+
+RHW/ 0.16d0, 0.21d0, 0.23d0, 0.247d0, 0.265d0, 0.279d0,
+
+&
+
+0.29d0, 0.314d0, 0.30d0, 0.33d0, 0.36d0, 0.38d0 /,
+
+&
+
+RLW/0.08d0, 0.067d0, 0.05d0, 0.0405d0, 0.038d0, 0.032d0,
+
+&
+
+0.025d0, 0.0245d0, 0.02d0, 0.015d0, 0.009d0, 0.006d0/
+
+
+
+! Speeds and weighting factors
+
+cc = 1.d0
+
+c_squ = cc *cc / 3.d0
+
+t_0 = 1.d0 / 3.d0
+
+t_1 = 1.d0 / 18.d0
+
+t_2 = 1.d0 / 36.d0
+
+! Weighting coefficient in the equilibrium distribution function
+
+t_k(0) = t_0
+
+do 1 k =1,6
+
+t_k(k) = t_1
+
+1 continue
+
+do 2 k =7,18
+
+t_k(k) = t_2
+
+2 continue
+
+! Please specify which temperature
+
+! and corresponding \rho_h, \rho_l in above ’data’ are chosen.
+
+! Initial T/T0, rho_h, and rho_l for the C-S EOS are listed in above
+
+! ’data’ section
+
+k = 5
+
+! important
+
+TT0 = TT0W(k)
+
+rho_h = RHW(k)
+
+rho_l = RLW(k)
+
+c=====================================================================
+
+c
+
+Initialisation
+
+c=====================================================================
+
+write (6,*) ’@@@⊔⊔3D LBM for single component multiphase @@@’
+
+write (6,*) ’@@@ lattice size lx = ’,lx
+
+write (6,*) ’@@@
+
+ly = ’,ly
+
+write (6,*) ’@@@
+
+lz = ’,lz
+
+call read_parameters(t_max)
+
+call read_obstacles(obst)
+
+call init_density(obst,u_x ,u_y ,rho ,ff )
+
+open(40,file=’./out/residue.dat’)
+
+c=====================================================================
+
+! Begin iterations
+
+do 100 time = 1, t_max
+
+if ( mod(time, Nwri) .eq. 0 .or. time. eq. 1) then
+
+write(*,*) time
+
+call write_results2(obst,rho,p,upx,upy,upz,time)
+
+end if
+
+call stream(obst,ff )
+
+! streaming (propagation) step
+
+! Obtain the macro variables
+
+call getuv(obst,u_x ,u_y, u_z, rho, ff )
+
+! Calculate the actual velocity
+
+call calcu_upr(obst,u_x,u_y,u_z,Fx,Fy,Fz,
+
+&
+
+Sx,Sy,Sz,rho, upx,upy,upz)
+
+! Calculate the interaction force between fluid nodes,
+
+! and the interaction force between solid and fluid nodes.
+
+call calcu_Fxy(obst,rho,Fx,Fy,Fz,Sx,Sy,Sz,p)
+
+
+
+
+!
+
+BGK model (a single relaxation parameter) is used
+
+call collision(tau,obst,u_x,u_y,u_z,rho ,ff ,Fx ,Fy ,Fz,
+
+&
+
+Sx,Sy, Sz )
+
+! collision step ,
+
+100 continue
+
+c===== End of the main loop
+
+close(40)
+
+write (6,*) ’@@@@** end **@@@@’
+
+end
+
+c-------------------------------------
+
+subroutine read_parameters(t_max)
+
+implicit none
+
+include "head.inc"
+
+integer t_max
+
+real*8 visc
+
+open(1,file=’./params.in’)
+
+! Initial radius of the droplet.
+
+read(1,*) RR
+
+! \rho_w in calculation of fluid-wall interaction
+
+read(1,*) rho_w
+
+! Relaxation parameter, which is related to viscosity
+
+read(1,*) tau
+
+! Maximum iteration specified
+
+read(1,*) t_max
+
+! Output data frequency (can be viewed with TECPLOT)
+
+read(1,*) Nwri
+
+close(1)
+
+visc =c_squ*(tau-0.5)
+
+write (*,’("kinematic viscosity=",f12.5, "lu ̂ 2/ts",
+
+&
+
+2X, "tau=", f12.7)’) visc, tau
+
+end
+
+!---------------------------------------------------
+
+! Initialize which nodes are wall node (obst=1) and
+
+! which are fluid nodes (obst=0)
+
+subroutine read_obstacles(obst)
+
+implicit none
+
+include "head.inc"
+
+integer x,y,z,obst(lx,ly,lz)
+
+do 11 z = 1, lz
+
+do 10 y = 1, ly
+
+do 40 x = 1, lx
+
+obst(x,y,z) = 0
+
+if(z .eq. 1)
+
+obst(x, y,1) = 1
+
+40
+
+continue
+
+10
+
+continue
+
+11 continue
+
+end
+
+!--------------------------------------------------
+
+subroutine init_density(obst,u_x,u_y,rho,ff)
+
+implicit none
+
+include "head.inc"
+
+
+integer i,j,x,y,z,k,n,obst(lx,ly,lz)
+
+real*8 u_squ,u_n(0:18),fequi(0:18),u_x(lx,ly,lz),u_y(lx,ly,lz),
+
+& rho(lx,ly,lz),ff(0:18,lx,ly,lz),u_z(lx,ly,lz)
+
+do 12 z = 1, lz
+
+do 11 y = 1, ly
+
+do 10 x = 1, lx
+
+u_x(x,y,z) = 0.d0
+
+u_y(x,y,z) = 0.d0
+
+u_z(x,y,z) = 0.d0
+
+rho(x,y,z) = rho_l
+
+if(real(x-lx/2)**2+real(y-ly/2)**2+real(z-5)**2< RR**2) then
+
+rho(x,y,z) = rho_h
+
+endif
+
+10
+
+continue
+
+11 continue
+
+12 continue
+
+do 82 z = 1, lz
+
+do 81 y = 1, ly
+
+do 80 x = 1, lx
+
+u_squ =
+
+u_x(x,y,z)*u_x(x,y,z) + u_y(x,y,z)*u_y(x,y,z)
+
+&
+
++
+
+u_z(x,y,z) *u_z(x,y,z)
+
+do 60 k = 0,18
+
+u_n(k)
+
+= xc(k)*u_x(x,y,z) + yc(k)*u_y(x,y,z)
+
+&
+
++ zc(k) *u_z(x,y,z)
+
+fequi(k) = t_k(k)* rho(x,y,z) * ( cc*u_n(k) / c_squ
+
+&
+
++ (u_n(k)*cc) *(u_n(k)*cc) / (2.d0 * c_squ *c_squ)
+
+&
+
+- u_squ / (2.d0 * c_squ)) + t_k(k) * rho(x,y,z)
+
+ff(k,x,y,z)= fequi(k)
+
+60
+
+continue
+
+80
+
+continue
+
+81 continue
+
+82 continue
+
+end
+
+!---------------------------------------------------
+
+streamcollision.for
+
+c===========================================================
+
+subroutine stream(obst,ff)
+
+implicit none
+
+include "head.inc"
+
+integer k,obst(lx,ly,lz)
+
+real*8 ff(0:18,lx,ly,lz),f_hlp(0:18,lx,ly,lz)
+
+integer x,y,z,x_e,x_w,y_n,y_s,z_n,z_s
+
+do 12 z = 1, lz
+
+do 11 y = 1, ly
+
+do 10 x = 1, lx
+
+!
+
+z_n = mod(z,lz) + 1
+
+y_n = mod(y,ly) + 1
+
+x_e = mod(x,lx) + 1
+
+
+
+z_s = lz - mod(lz + 1 - z, lz)
+
+y_s = ly - mod(ly + 1 - y, ly)
+
+x_w = lx - mod(lx + 1 - x, lx)
+
+c......... Propagation
+
+f_hlp(1 ,x_e,y ,z ) = ff(1,x,y,z)
+
+f_hlp(2 ,x_w,y ,z ) = ff(2,x,y,z)
+
+f_hlp(3 ,x ,y_n,z ) = ff(3,x,y,z)
+
+f_hlp(4 ,x ,y_s,z ) = ff(4,x,y,z)
+
+f_hlp(5 ,x ,y ,z_n) = ff(5,x,y,z)
+
+f_hlp(6 ,x ,y ,z_s) = ff(6,x,y,z)
+
+f_hlp(7 ,x_e,y_n,z ) = ff(7,x,y,z)
+
+f_hlp(8 ,x_e,y_s,z ) = ff(8,x,y,z)
+
+f_hlp(9 ,x_w,y_n,z ) = ff(9,x,y,z)
+
+f_hlp(10,x_w,y_s,z ) = ff(10,x,y,z)
+
+f_hlp(11,x_e,y ,z_n) = ff(11,x,y,z)
+
+f_hlp(12,x_w,y ,z_n) = ff(12,x,y,z)
+
+f_hlp(13,x_e,y ,z_s) = ff(13,x,y,z)
+
+f_hlp(14,x_w,y ,z_s) = ff(14,x,y,z)
+
+f_hlp(15,x ,y_n,z_n) = ff(15,x,y,z)
+
+f_hlp(16,x ,y_n,z_s) = ff(16,x,y,z)
+
+f_hlp(17,x ,y_s,z_n) = ff(17,x,y,z)
+
+f_hlp(18,x ,y_s,z_s) = ff(18,x,y,z)
+
+10
+
+continue
+
+11 continue
+
+12 continue
+
+c---------------------Update distribution function
+
+do 22 z = 1, lz
+
+do 21 y = 1, ly
+
+do 20 x = 1, lx
+
+do k =1, 18
+
+ff(k,x,y,z) = f_hlp(k,x,y,z)
+
+enddo
+
+20
+
+continue
+
+21
+
+continue
+
+22 continue
+
+return
+
+end
+
+c-----------------------------------------
+
+subroutine getuv(obst,u_x,u_y,u_z,rho,ff)
+
+include "head.inc"
+
+integer x,y,obst(lx,ly,lz)
+
+real*8 u_x(lx,ly,lz),u_y(lx,ly,lz),rho(lx,ly,lz),
+
+& ff(0:18,lx,ly,lz),u_z(lx,ly,lz)
+
+do 12 z = 1, lz
+
+do 11 y = 1, ly
+
+do 10 x = 1, lx
+
+rho(x,y,z) = 0.d0
+
+if(obst(x,y,z) .eq. 0 ) then
+
+do 5 k = 0 ,18
+
+rho(x,y,z) = rho(x,y,z) + ff(k,x,y,z)
+
+5
+
+continue
+
+c----------------------
+
+
+
+if(rho(x,y,z) .ne. 0.d0) then
+
+&
+
+&
+
+&u_x(x,y,z)=(ff(1,x,y,z)+ ff(7,x,y,z)+ ff(8,x,y,z) +
+
+ff(11,x,y,z) + ff(13,x,y,z)
+
+-(ff(2,x,y,z) + ff(9,x,y,z) + ff(10,x,y,z)+
+
+ff(12,x,y,z) + ff(14,x,y,z) ))/rho(x,y,z)
+
+&
+
+&
+
+&u_y(x,y,z) = (ff(3,x,y,z) + ff(7,x,y,z) + ff(9,x,y,z) +
+
+ff(15,x,y,z) + ff(16,x,y,z)
+
+-(ff(4,x,y,z) + ff(8,x,y,z) + ff(10,x,y,z) +
+
+ff(17,x,y,z) + ff(18,x,y,z) )) /rho(x,y,z)
+
+&
+
+&
+
+&
+
+u_z(x,y,z)= (ff(5,x,y,z) + ff(11,x,y,z) + ff(12,x,y,z)+
+
+ff(15,x,y,z) + ff(17,x,y,z)
+
+-(ff(6,x,y,z) + ff(13,x,y,z) + ff(14,x,y,z) +
+
+ff(16,x,y,z) + ff(18,x,y,z) )) /rho(x,y,z)
+
+endif
+
+endif
+
+10
+
+continue
+
+11 continue
+
+12 continue
+
+end
+
+c-----------------------------------------
+
+subroutine calcu_upr(obst,u_x,u_y,u_z,
+
+Fx,Fy,Fz,Sx,Sy,Sz,rho,upx,upy,upz)
+
+implicit none
+
+include "head.inc"
+
+integer x,y,z ,obst(lx,ly,lz)
+
+real*8 u_x(lx,ly,lz),u_y(lx,ly,lz),rho(lx,ly,lz),
+
+% upx(lx,ly,lz), upy(lx,ly,lz), upz(lx,ly,lz),
+
+& u_z(lx,ly,lz), Fx(lx,ly,lz), Fy(lx,ly,lz), Fz(lx,ly,lz),
+
+& Sx(lx,ly,lz), Sy(lx,ly,lz), Sz(lx,ly,lz)
+
+&
+
+do 9 z = 1, lz
+
+do 10 y = 1, ly
+
+do 11 x = 1, lx
+
+if(obst(x,y,z) .eq. 0) then
+
+upx(x,y,z) = u_x(x,y,z) + (Fx(x,y,z)+Sx(x,y,z))/2.d0/ rho(x,y,z)
+
+upy(x,y,z) = u_y(x,y,z) + (Fy(x,y,z)+Sy(x,y,z))/2.d0/ rho(x,y,z)
+
+upz(x,y,z) = u_z(x,y,z) + (Fz(x,y,z)+Sz(x,y,z))/2.d0/ rho(x,y,z)
+
+else
+
+upx(x,y,z) = u_x(x,y,z)
+
+upy(x,y,z) = u_y(x,y,z)
+
+upz(x,y,z) = u_z(x,y,z)
+
+endif
+
+11
+
+continue
+
+10
+
+continue
+
+9 continue
+
+end
+
+c-----------------------------------------
+
+
+subroutine collision(tauc,obst,u_x,u_y,u_z,
+
+& rho,ff,Fx,Fy,Fz, Sx, Sy, Sz)
+
+!
+
+implicit none
+
+include "head.inc"
+
+integer l,obst(lx,ly,lz)
+
+real*8 u_x(lx,ly,lz),u_y(lx,ly,lz),ff(0:18,lx,ly,lz),rho(lx,ly,lz)
+
+real*8 Fx(lx,ly,lz),Fy(lx,ly,lz), Sx(lx,ly,lz), Sy(lx,ly,lz)
+
+real*8 Fz(lx,ly,lz),u_z(lx,ly,lz),Sz(lx,ly,lz),temp(18)
+
+integer x,y,z,k
+
+real*8 u_n(0:18),fequ(0:18),fequ2(0:18),u_squ,tauc,ux,uy,uz
+
+do 4 z = 1, lz
+
+do 5 y = 1, ly
+
+do 6 x = 1, lx
+
+if(obst(x,y,z) .eq. 1) then
+
+do k =1, 18
+
+temp(k) =ff(k,x,y,z)
+
+enddo
+
+do k =1, 18
+
+ff(opp(k),x,y,z) = temp(k)
+
+enddo
+
+endif
+
+if(obst(x,y,z) .eq. 0) then
+
+ux = u_x(x,y,z) +tauc * ( Fx(x,y,z)+Sx(x,y,z) ) / rho(x,y,z)
+
+uy = u_y(x,y,z) +tauc * ( Fy(x,y,z)+Sy(x,y,z) ) / rho(x,y,z)
+
+uz = u_z(x,y,z) +tauc * ( Fz(x,y,z)+Sz(x,y,z) ) / rho(x,y,z)
+
+u_squ = ux * ux + uy * uy +uz *uz
+
+do 10 k = 0,18
+
+c...........Equillibrium distribution function
+
+u_n(k) = xc(k)*ux + yc(k)*uy + zc(k)*uz
+
+fequ(k) = t_k(k)* rho(x,y,z) * ( cc*u_n(k) / c_squ
+
+&
+
++ (u_n(k)*cc) *(u_n(k)*cc) / (2.d0 * c_squ *c_squ)
+
+&
+
+- u_squ / (2.d0 * c_squ)) + t_k(k) * rho(x,y,z)
+
+c...........Collision step
+
+ff(k,x,y,z) = fequ(k) + (1.d0-1.d0/tauc)*(ff(k,x,y,z) -fequ(k))
+
+10
+
+continue
+
+endif
+
+continue
+
+continue
+
+continue
+
+end
+
+c-----------------------------------------
+
+subroutine getf_equ(rh,u,v,w,f_equ)
+
+include ’head.inc’
+
+real*8 rh, u,v,w,u_squ, f_equ(0:18),u_n(0:18)
+
+6
+
+5
+
+4
+
+u_squ =u*u +v*v +w*w
+
+do 10 i =0,1868
+
+
+
+u_n(i) = u *xc(i) +v *yc(i)+ w *zc(i)
+
+f_equ(i) = t_k(i) * rh *( u_n(i)/c_squ
+
+&
+
++ u_n(i) *u_n(i) / (2.d0 * c_squ *c_squ)
+
+&
+
+- u_squ / (2.d0 * c_squ)) + t_k(i) * rh
+
+10 continue
+
+end
+
+force.for
+
+c===========================================================
+
+subroutine calcu_Fxy(obst,rho,Fx,Fy,Fz,Sx,Sy,Sz,p)
+
+implicit none
+
+include "head.inc"
+
+integer x,y,z,obst(lx,ly,lz),yn,yp,xn,xp,zp,zn, i,j,k
+
+real*8 Fx(lx,ly,lz),Fy(lx,ly,lz),Fz(lx,ly,lz)
+
+& ,psx(lx,ly,lz), sum_x, sum_y, sum_z, psx_w
+
+& ,rho(lx,ly,lz), Sx(lx,ly,lz), Sy(lx,ly,lz), Sz(lx,ly,lz)
+
+% , Fztemp, R,a,b, Tc, TT, alfa, omega, G1,p(lx,ly,lz)
+
+!
+
+Parameters in YUAN C-S EOS
+
+R = 1.0d0
+
+b = 4.d0
+
+a = 1.d0
+
+Tc = 0.3773d0*a/(b*R)
+
+TT= TT0 *Tc
+
+do 4 k = 1,lz
+
+do 5 j = 1,ly
+
+do 6 i = 1,lx
+
+if (obst(i,j,k ) .eq. 0 .and. rho(i,j,k).ne. 0.d0)
+
+&
+
+&
+
+%
+
+then
+
+if( (R*TT*
+
+(1.d0+(4.d0* rho(i,j,k)-2.d0* rho(i,j,k)* rho(i,j,k)
+
+)/(1.d0- rho(i,j,k))**3
+
+)
+
+-a* rho(i,j,k) -1.d0/3.d0) .gt. 0.) then
+
+G1= 1.d0/3.d0
+
+else
+
+G1= -1.d0/3.d0
+
+endif
+
+c+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+psx(i,j,k) = sqrt( 6.d0* rho(i,j,k) * ( R*TT*
+
+&
+
+(1.d0+ (4.d0* rho(i,j,k)-2.d0*rho(i,j,k)*rho(i,j,k) )
+
+& /(1.d0-rho(i,j,k))**3 )
+
+&
+
+-a* rho(i,j,k) -1.d0/3.d0)
+
+&
+
+/G1 )
+
+c Yuan C-S EOS
+
+p(i,j,k) = rho(i,j,k)/3.d0 + G1/6.d0 * psx(i,j,k) *psx(i,j,k)
+
+endif
+
+6 continue
+
+5 continue
+
+4 continue
+
+&
+
+&
+
+psx_w = sqrt( 6.d0* rho_w * ( R*TT*
+
+(1.d0+ (4.d0* rho_w-2.d0*rho_w * rho_w )
+
+/(1.d0- rho_w)**3 )
+
+
+&
+
+&
+
+-a* rho_w -1.d0/3.d0)
+
+/G1 )
+
+do 30 z = 1,lz
+
+do 20 y = 1,ly
+
+do 10 x = 1,lx
+
+c.........interaction between neighbouring with periodic boundaries
+
+Fx(x,y,z) =0.d0
+
+Fy(x,y,z) =0.d0
+
+Fz(x,y,z) =0.d0
+
+if (obst(x,y,z) .eq. 0)
+
+then
+
+sum_x = 0.d0
+
+sum_y = 0.d0
+
+sum_z = 0.d0
+
+do 11 k =1, 18
+
+xp=x+ex(k)
+
+yp=y+ey(k)
+
+zp=z+ez(k)
+
+if(xp .lt. 1) xp = lx
+
+if(xp .gt. lx) xp =1
+
+if(yp .lt. 1) yp = ly
+
+if(yp .gt. ly) yp =1
+
+if(zp .lt. 1) zp = lz
+
+if(zp .gt. lz) zp =1
+
+if (obst(xp,yp,zp) .eq. 1) then
+
+! Interact with solid nodes (obst=1)
+
+sum_x = sum_x + t_k(k)*xc(k)
+
+sum_y = sum_y + t_k(k)*yc(k)
+
+sum_z = sum_z + t_k(k)*zc(k)
+
+else
+
+! Interact with fluid nodes (obst=0)
+
+Fx(x,y,z)=Fx(x,y,z) +t_k(k)*xc(k)* psx(xp,yp,zp)
+
+Fy(x,y,z)=Fy(x,y,z) +t_k(k)*yc(k)* psx(xp,yp,zp)
+
+Fz(x,y,z)=Fz(x,y,z) +t_k(k)*zc(k)* psx(xp,yp,zp)
+
+endif
+
+11 continue
+
+! Final wall-fluid interaction
+
+Sx(x,y,z) = -G1*sum_x *psx(x,y,z) *psx_w
+
+Sy(x,y,z) = -G1*sum_y *psx(x,y,z) *psx_w
+
+Sz(x,y,z) = -G1*sum_z *psx(x,y,z) *psx_w
+
+! Final fluid-fluid interaction
+
+Fx (x,y,z)= -G1 *psx (x,y,z)* Fx(x,y,z)
+
+Fy (x,y,z)= -G1 *psx (x,y,z)* Fy(x,y,z)
+
+Fz (x,y,z)= -G1 *psx (x,y,z)* Fz(x,y,z)
+
+endif
+
+10 continue
+
+20 continue
+
+30 continue
+
+end
+
+
+
+output.for
+
+c===================================================
+
+subroutine write_results2(obst,rho,p,upx,upy,upz, n)
+
+implicit none
+
+include "head.inc"
+
+integer x,y,z,i,n
+
+real*8 rho(lx,ly,lz),upx(lx,ly,lz),upy(lx,ly,lz)
+
+real*8 upz(lx,ly,lz), p(lx,ly,lz)
+
+integer obst(lx,ly,lz)
+
+character filename*16, B*6
+
+write(B,’(i6.6)’) n
+
+filename=’out/3D’//B//’.plt’
+
+open(41,file=filename)
+
+write(41,*) ’variables = x, y, z, rho, upx, upy, upz, p, obst’
+
+write(41,*) ’zone i=’, lx, ’, j=’, ly, ’, k=’, lz, ’, f=point’
+
+do 10 z = 1, lz
+
+do 10 y = 1, ly
+
+do 10 x = 1, lx
+
+write(41,9) x, y, z, rho(x,y,z),
+
+& upx(x,y,z), upy(x,y,z), upz(x,y,z),
+
+& p(x,y,z), obst(x,y,z)
+
+10 continue
+
+9
+
+format(3i4, 5f15.8, i4)
+
+close(41)
+
+end
+
+params.in
+
+c===============================================
+
+15.
+
+! RR droplet radius
+
+0.12
+
+! rho_w, density of wall
+
+1.0
+
+! tau(1)
+
+10000
+
+! maximum time step
+
+500
+
+! Nwri: output every Nwri time steps!
+
+
+
+
+what they've used? use the exact same thing and give me the code in cpp in my own structure pls :)
+ok. now have a look at this code writte on fortran in the lbm multiphase book!
+
+NOTES:
+! 1. The whole project is composed of head.inc, main.for,
+! streamcollision.for, force.for, and output.for.
+! 2. head.inc is a header file, where some common blocks are defined.
+! 3. In the file: ‘params.in’ is a file you can put the critical
+! parameters.
+! Do not include “c=======..." in the file. The file begins with a
+! parameter.
+! 4. Before running this project, please create a new sub-folder
+! ‘out’
+! under the working directory.
+! 5. Here C-S EOS is given as an example. The other EOS can be
+! included similarly.
+! 6. Please create a new folder ’out’ in the working directory
+! before running the code
+head.inc:
+c==========================================================
+! Domain size is lx \times ly \times \lz
+integer lx,ly,lz
+PARAMETER(lx=51,ly=51,lz=41)
+common/AA/ G,tau,Gads(2),ex(0:18),ey(0:18),ez(0:18),opp(18)
+real*8 G,tau,Gads
+integer ex,ey,ez, opp
+common/b/ error,vel,xc(0:18),yc(0:18),zc(0:18),t_k(0:18)
+real*8 error,vel,xc,yc,zc,t_k
+common/vel/ c_squ,cc,TT0,rho_w,Ca,RR, Nwri
+real*8 c_squ,cc,TT0, rho_w, Ca,RR
+integer Nwri
+common/app/ t_0,t_1,t_2, rho_h, rho_l
+real*8 t_0,t_1,t_2, rho_h, rho_l
+main.for
+c===========================================================
+program D3Q19LBM
+implicit none
+include "head.inc"
+integer t_max,time,k
+! This array defines which lattice positions are occupied by fluid
+! nodes (obst=0)
+! or solid nodes (obst=1)
+integer obst(lx,ly,lz)
+! Velocity components
+real*8 u_x(lx,ly,lz),u_y(lx,ly,lz), u_z(lx,ly,lz)
+! Pressure and density
+real*8 p(lx,ly,lz),rho(lx,ly,lz)
+
+! The real fluid density
+! which may differ from the velocity components in the above; refer
+!
+to SC model
+real*8 upx(lx,ly,lz),upy(lx,ly,lz),upz(lx,ly,lz)
+! The force components: Fx, Fy, Fz for the interaction between
+!
+fluid nodes.
+! Sx, Sy, Sz are the interaction (components) between the fluid nodes
+!
+and solid nodes
+! ff is the distribution function
+real*8 ff(0:18,lx,ly,lz),Fx(lx,ly,lz),Fy(lx,ly,lz),
+&
+Fz(lx,ly,lz), Sx(lx,ly,lz),Sy(lx,ly,lz), Sz(lx,ly,lz)
+! TT0W is the value of T/T0;
+RHW and RLW are the coexisting
+!
+densities
+! in the specified T/T0.
+! For initialization, \rho_l (lower density)
+! and \rho_h (higher density) are supposed to be known.
+real*8
+TT0W(12), RHW(12), RLW(12)
+!-------------------------------------------
+! Author: Haibo Huang, Huanghb@ustc.edu.cn
+!-------------------------------------------
+! The below data define the D3Q19 velocity model, xc(ex), yc(ey),
+!
+zc(ez)
+! are the components of e_{ix}, e_{iy}, and e_{iz}, respectively.
+data xc/0.d0, 1.d0, -1.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, 1.d0,
+& -1.d0, -1.d0, 1.d0, -1.d0, 1.d0, -1.d0, 0.d0, 0.d0,
+& 0.d0, 0.d0 /,
+&
+yc/0.d0, 0.d0, 0.d0, 1.d0, -1.0d0, 0.d0, 0.d0, 1.d0, -1.d0,
+& 1.d0, -1.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, 1.d0,
+& -1.d0, -1.d0/,
+&
+zc/0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, -1.d0, 0.d0, 0.d0,
+& 0.d0, 0.d0, 1.d0, 1.d0, -1.d0, -1.d0, 1.d0, -1.d0,
+& 1.d0, -1.d0/
+data ex/0, 1, -1, 0, 0, 0, 0, 1, 1, -1, -1, 1, -1, 1, -1, 0, 0,
+& 0, 0 /,
+&
+ey/0, 0, 0, 1, -1, 0, 0, 1, -1, 1, -1, 0, 0, 0, 0, 1, 1,
+& -1, -1/,
+&
+ez/0, 0, 0, 0, 0, 1, -1, 0, 0, 0, 0, 1, 1, -1, -1, 1, -1,
+& 1, -1/
+! This array gives the opposite direction for e_1, e_2, e_3,
+!
+.....e_18
+! It implements the simple bounce-back rule we use in the collision
+!
+step
+! for solid nodes (obst=1)
+data opp/2,1,4,3,6,5,10,9,8,7,14,13,12,11,18,17,16,15/
+! C-S EOS
+! RHW and RLW are the coexisting densities in the corresponding
+!
+specified T/T0.
+data TT0W/0.975d0, 0.95d0, 0.925d0, 0.9d0, 0.875d0, 0.85d0,
+&
+0.825d0, 0.8d0, 0.775d0, 0.75d0, 0.7d0, 0.65d0 /,
+&
+RHW/ 0.16d0, 0.21d0, 0.23d0, 0.247d0, 0.265d0, 0.279d0,
+&
+0.29d0, 0.314d0, 0.30d0, 0.33d0, 0.36d0, 0.38d0 /,
+&
+RLW/0.08d0, 0.067d0, 0.05d0, 0.0405d0, 0.038d0, 0.032d0,
+&
+0.025d0, 0.0245d0, 0.02d0, 0.015d0, 0.009d0, 0.006d0/
+
+
+! Speeds and weighting factors
+cc = 1.d0
+c_squ = cc *cc / 3.d0
+t_0 = 1.d0 / 3.d0
+t_1 = 1.d0 / 18.d0
+t_2 = 1.d0 / 36.d0
+! Weighting coefficient in the equilibrium distribution function
+t_k(0) = t_0
+do 1 k =1,6
+t_k(k) = t_1
+1 continue
+do 2 k =7,18
+t_k(k) = t_2
+2 continue
+! Please specify which temperature
+! and corresponding \rho_h, \rho_l in above ’data’ are chosen.
+! Initial T/T0, rho_h, and rho_l for the C-S EOS are listed in above
+! ’data’ section
+k = 5
+! important
+TT0 = TT0W(k)
+rho_h = RHW(k)
+rho_l = RLW(k)
+c=====================================================================
+c
+Initialisation
+c=====================================================================
+write (6,*) ’@@@⊔⊔3D LBM for single component multiphase @@@’
+write (6,*) ’@@@ lattice size lx = ’,lx
+write (6,*) ’@@@
+ly = ’,ly
+write (6,*) ’@@@
+lz = ’,lz
+call read_parameters(t_max)
+call read_obstacles(obst)
+call init_density(obst,u_x ,u_y ,rho ,ff )
+open(40,file=’./out/residue.dat’)
+c=====================================================================
+! Begin iterations
+do 100 time = 1, t_max
+if ( mod(time, Nwri) .eq. 0 .or. time. eq. 1) then
+write(*,*) time
+call write_results2(obst,rho,p,upx,upy,upz,time)
+end if
+call stream(obst,ff )
+! streaming (propagation) step
+! Obtain the macro variables
+call getuv(obst,u_x ,u_y, u_z, rho, ff )
+! Calculate the actual velocity
+call calcu_upr(obst,u_x,u_y,u_z,Fx,Fy,Fz,
+&
+Sx,Sy,Sz,rho, upx,upy,upz)
+! Calculate the interaction force between fluid nodes,
+! and the interaction force between solid and fluid nodes.
+call calcu_Fxy(obst,rho,Fx,Fy,Fz,Sx,Sy,Sz,p)
+
+
+
+!
+BGK model (a single relaxation parameter) is used
+call collision(tau,obst,u_x,u_y,u_z,rho ,ff ,Fx ,Fy ,Fz,
+&
+Sx,Sy, Sz )
+! collision step ,
+100 continue
+c===== End of the main loop
+close(40)
+write (6,*) ’@@@@** end **@@@@’
+end
+c-------------------------------------
+subroutine read_parameters(t_max)
+implicit none
+include "head.inc"
+integer t_max
+real*8 visc
+open(1,file=’./params.in’)
+! Initial radius of the droplet.
+read(1,*) RR
+! \rho_w in calculation of fluid-wall interaction
+read(1,*) rho_w
+! Relaxation parameter, which is related to viscosity
+read(1,*) tau
+! Maximum iteration specified
+read(1,*) t_max
+! Output data frequency (can be viewed with TECPLOT)
+read(1,*) Nwri
+close(1)
+visc =c_squ*(tau-0.5)
+write (*,’("kinematic viscosity=",f12.5, "lu ̂ 2/ts",
+&
+2X, "tau=", f12.7)’) visc, tau
+end
+!---------------------------------------------------
+! Initialize which nodes are wall node (obst=1) and
+! which are fluid nodes (obst=0)
+subroutine read_obstacles(obst)
+implicit none
+include "head.inc"
+integer x,y,z,obst(lx,ly,lz)
+do 11 z = 1, lz
+do 10 y = 1, ly
+do 40 x = 1, lx
+obst(x,y,z) = 0
+if(z .eq. 1)
+obst(x, y,1) = 1
+40
+continue
+10
+continue
+11 continue
+end
+!--------------------------------------------------
+subroutine init_density(obst,u_x,u_y,rho,ff)
+implicit none
+include "head.inc"
+
+integer i,j,x,y,z,k,n,obst(lx,ly,lz)
+real*8 u_squ,u_n(0:18),fequi(0:18),u_x(lx,ly,lz),u_y(lx,ly,lz),
+& rho(lx,ly,lz),ff(0:18,lx,ly,lz),u_z(lx,ly,lz)
+do 12 z = 1, lz
+do 11 y = 1, ly
+do 10 x = 1, lx
+u_x(x,y,z) = 0.d0
+u_y(x,y,z) = 0.d0
+u_z(x,y,z) = 0.d0
+rho(x,y,z) = rho_l
+if(real(x-lx/2)**2+real(y-ly/2)**2+real(z-5)**2< RR**2) then
+rho(x,y,z) = rho_h
+endif
+10
+continue
+11 continue
+12 continue
+do 82 z = 1, lz
+do 81 y = 1, ly
+do 80 x = 1, lx
+u_squ =
+u_x(x,y,z)*u_x(x,y,z) + u_y(x,y,z)*u_y(x,y,z)
+&
++
+u_z(x,y,z) *u_z(x,y,z)
+do 60 k = 0,18
+u_n(k)
+= xc(k)*u_x(x,y,z) + yc(k)*u_y(x,y,z)
+&
++ zc(k) *u_z(x,y,z)
+fequi(k) = t_k(k)* rho(x,y,z) * ( cc*u_n(k) / c_squ
+&
++ (u_n(k)*cc) *(u_n(k)*cc) / (2.d0 * c_squ *c_squ)
+&
+- u_squ / (2.d0 * c_squ)) + t_k(k) * rho(x,y,z)
+ff(k,x,y,z)= fequi(k)
+60
+continue
+80
+continue
+81 continue
+82 continue
+end
+!---------------------------------------------------
+streamcollision.for
+c===========================================================
+subroutine stream(obst,ff)
+implicit none
+include "head.inc"
+integer k,obst(lx,ly,lz)
+real*8 ff(0:18,lx,ly,lz),f_hlp(0:18,lx,ly,lz)
+integer x,y,z,x_e,x_w,y_n,y_s,z_n,z_s
+do 12 z = 1, lz
+do 11 y = 1, ly
+do 10 x = 1, lx
+!
+z_n = mod(z,lz) + 1
+y_n = mod(y,ly) + 1
+x_e = mod(x,lx) + 1
+
+
+z_s = lz - mod(lz + 1 - z, lz)
+y_s = ly - mod(ly + 1 - y, ly)
+x_w = lx - mod(lx + 1 - x, lx)
+c......... Propagation
+f_hlp(1 ,x_e,y ,z ) = ff(1,x,y,z)
+f_hlp(2 ,x_w,y ,z ) = ff(2,x,y,z)
+f_hlp(3 ,x ,y_n,z ) = ff(3,x,y,z)
+f_hlp(4 ,x ,y_s,z ) = ff(4,x,y,z)
+f_hlp(5 ,x ,y ,z_n) = ff(5,x,y,z)
+f_hlp(6 ,x ,y ,z_s) = ff(6,x,y,z)
+f_hlp(7 ,x_e,y_n,z ) = ff(7,x,y,z)
+f_hlp(8 ,x_e,y_s,z ) = ff(8,x,y,z)
+f_hlp(9 ,x_w,y_n,z ) = ff(9,x,y,z)
+f_hlp(10,x_w,y_s,z ) = ff(10,x,y,z)
+f_hlp(11,x_e,y ,z_n) = ff(11,x,y,z)
+f_hlp(12,x_w,y ,z_n) = ff(12,x,y,z)
+f_hlp(13,x_e,y ,z_s) = ff(13,x,y,z)
+f_hlp(14,x_w,y ,z_s) = ff(14,x,y,z)
+f_hlp(15,x ,y_n,z_n) = ff(15,x,y,z)
+f_hlp(16,x ,y_n,z_s) = ff(16,x,y,z)
+f_hlp(17,x ,y_s,z_n) = ff(17,x,y,z)
+f_hlp(18,x ,y_s,z_s) = ff(18,x,y,z)
+10
+continue
+11 continue
+12 continue
+c---------------------Update distribution function
+do 22 z = 1, lz
+do 21 y = 1, ly
+do 20 x = 1, lx
+do k =1, 18
+ff(k,x,y,z) = f_hlp(k,x,y,z)
+enddo
+20
+continue
+21
+continue
+22 continue
+return
+end
+c-----------------------------------------
+subroutine getuv(obst,u_x,u_y,u_z,rho,ff)
+include "head.inc"
+integer x,y,obst(lx,ly,lz)
+real*8 u_x(lx,ly,lz),u_y(lx,ly,lz),rho(lx,ly,lz),
+& ff(0:18,lx,ly,lz),u_z(lx,ly,lz)
+do 12 z = 1, lz
+do 11 y = 1, ly
+do 10 x = 1, lx
+rho(x,y,z) = 0.d0
+if(obst(x,y,z) .eq. 0 ) then
+do 5 k = 0 ,18
+rho(x,y,z) = rho(x,y,z) + ff(k,x,y,z)
+5
+continue
+c----------------------
+
+
+if(rho(x,y,z) .ne. 0.d0) then
+&
+&
+&u_x(x,y,z)=(ff(1,x,y,z)+ ff(7,x,y,z)+ ff(8,x,y,z) +
+ff(11,x,y,z) + ff(13,x,y,z)
+-(ff(2,x,y,z) + ff(9,x,y,z) + ff(10,x,y,z)+
+ff(12,x,y,z) + ff(14,x,y,z) ))/rho(x,y,z)
+&
+&
+&u_y(x,y,z) = (ff(3,x,y,z) + ff(7,x,y,z) + ff(9,x,y,z) +
+ff(15,x,y,z) + ff(16,x,y,z)
+-(ff(4,x,y,z) + ff(8,x,y,z) + ff(10,x,y,z) +
+ff(17,x,y,z) + ff(18,x,y,z) )) /rho(x,y,z)
+&
+&
+&
+u_z(x,y,z)= (ff(5,x,y,z) + ff(11,x,y,z) + ff(12,x,y,z)+
+ff(15,x,y,z) + ff(17,x,y,z)
+-(ff(6,x,y,z) + ff(13,x,y,z) + ff(14,x,y,z) +
+ff(16,x,y,z) + ff(18,x,y,z) )) /rho(x,y,z)
+endif
+endif
+10
+continue
+11 continue
+12 continue
+end
+c-----------------------------------------
+subroutine calcu_upr(obst,u_x,u_y,u_z,
+Fx,Fy,Fz,Sx,Sy,Sz,rho,upx,upy,upz)
+implicit none
+include "head.inc"
+integer x,y,z ,obst(lx,ly,lz)
+real*8 u_x(lx,ly,lz),u_y(lx,ly,lz),rho(lx,ly,lz),
+% upx(lx,ly,lz), upy(lx,ly,lz), upz(lx,ly,lz),
+& u_z(lx,ly,lz), Fx(lx,ly,lz), Fy(lx,ly,lz), Fz(lx,ly,lz),
+& Sx(lx,ly,lz), Sy(lx,ly,lz), Sz(lx,ly,lz)
+&
+do 9 z = 1, lz
+do 10 y = 1, ly
+do 11 x = 1, lx
+if(obst(x,y,z) .eq. 0) then
+upx(x,y,z) = u_x(x,y,z) + (Fx(x,y,z)+Sx(x,y,z))/2.d0/ rho(x,y,z)
+upy(x,y,z) = u_y(x,y,z) + (Fy(x,y,z)+Sy(x,y,z))/2.d0/ rho(x,y,z)
+upz(x,y,z) = u_z(x,y,z) + (Fz(x,y,z)+Sz(x,y,z))/2.d0/ rho(x,y,z)
+else
+upx(x,y,z) = u_x(x,y,z)
+upy(x,y,z) = u_y(x,y,z)
+upz(x,y,z) = u_z(x,y,z)
+endif
+11
+continue
+10
+continue
+9 continue
+end
+c-----------------------------------------
+
+subroutine collision(tauc,obst,u_x,u_y,u_z,
+& rho,ff,Fx,Fy,Fz, Sx, Sy, Sz)
+!
+implicit none
+include "head.inc"
+integer l,obst(lx,ly,lz)
+real*8 u_x(lx,ly,lz),u_y(lx,ly,lz),ff(0:18,lx,ly,lz),rho(lx,ly,lz)
+real*8 Fx(lx,ly,lz),Fy(lx,ly,lz), Sx(lx,ly,lz), Sy(lx,ly,lz)
+real*8 Fz(lx,ly,lz),u_z(lx,ly,lz),Sz(lx,ly,lz),temp(18)
+integer x,y,z,k
+real*8 u_n(0:18),fequ(0:18),fequ2(0:18),u_squ,tauc,ux,uy,uz
+do 4 z = 1, lz
+do 5 y = 1, ly
+do 6 x = 1, lx
+if(obst(x,y,z) .eq. 1) then
+do k =1, 18
+temp(k) =ff(k,x,y,z)
+enddo
+do k =1, 18
+ff(opp(k),x,y,z) = temp(k)
+enddo
+endif
+if(obst(x,y,z) .eq. 0) then
+ux = u_x(x,y,z) +tauc * ( Fx(x,y,z)+Sx(x,y,z) ) / rho(x,y,z)
+uy = u_y(x,y,z) +tauc * ( Fy(x,y,z)+Sy(x,y,z) ) / rho(x,y,z)
+uz = u_z(x,y,z) +tauc * ( Fz(x,y,z)+Sz(x,y,z) ) / rho(x,y,z)
+u_squ = ux * ux + uy * uy +uz *uz
+do 10 k = 0,18
+c...........Equillibrium distribution function
+u_n(k) = xc(k)*ux + yc(k)*uy + zc(k)*uz
+fequ(k) = t_k(k)* rho(x,y,z) * ( cc*u_n(k) / c_squ
+&
++ (u_n(k)*cc) *(u_n(k)*cc) / (2.d0 * c_squ *c_squ)
+&
+- u_squ / (2.d0 * c_squ)) + t_k(k) * rho(x,y,z)
+c...........Collision step
+ff(k,x,y,z) = fequ(k) + (1.d0-1.d0/tauc)*(ff(k,x,y,z) -fequ(k))
+10
+continue
+endif
+continue
+continue
+continue
+end
+c-----------------------------------------
+subroutine getf_equ(rh,u,v,w,f_equ)
+include ’head.inc’
+real*8 rh, u,v,w,u_squ, f_equ(0:18),u_n(0:18)
+6
+5
+4
+u_squ =u*u +v*v +w*w
+do 10 i =0,1868
+
+
+u_n(i) = u *xc(i) +v *yc(i)+ w *zc(i)
+f_equ(i) = t_k(i) * rh *( u_n(i)/c_squ
+&
++ u_n(i) *u_n(i) / (2.d0 * c_squ *c_squ)
+&
+- u_squ / (2.d0 * c_squ)) + t_k(i) * rh
+10 continue
+end
+force.for
+c===========================================================
+subroutine calcu_Fxy(obst,rho,Fx,Fy,Fz,Sx,Sy,Sz,p)
+implicit none
+include "head.inc"
+integer x,y,z,obst(lx,ly,lz),yn,yp,xn,xp,zp,zn, i,j,k
+real*8 Fx(lx,ly,lz),Fy(lx,ly,lz),Fz(lx,ly,lz)
+& ,psx(lx,ly,lz), sum_x, sum_y, sum_z, psx_w
+& ,rho(lx,ly,lz), Sx(lx,ly,lz), Sy(lx,ly,lz), Sz(lx,ly,lz)
+% , Fztemp, R,a,b, Tc, TT, alfa, omega, G1,p(lx,ly,lz)
+!
+Parameters in YUAN C-S EOS
+R = 1.0d0
+b = 4.d0
+a = 1.d0
+Tc = 0.3773d0*a/(b*R)
+TT= TT0 *Tc
+do 4 k = 1,lz
+do 5 j = 1,ly
+do 6 i = 1,lx
+if (obst(i,j,k ) .eq. 0 .and. rho(i,j,k).ne. 0.d0)
+&
+&
+%
+then
+if( (R*TT*
+(1.d0+(4.d0* rho(i,j,k)-2.d0* rho(i,j,k)* rho(i,j,k)
+)/(1.d0- rho(i,j,k))**3
+)
+-a* rho(i,j,k) -1.d0/3.d0) .gt. 0.) then
+G1= 1.d0/3.d0
+else
+G1= -1.d0/3.d0
+endif
+c+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+psx(i,j,k) = sqrt( 6.d0* rho(i,j,k) * ( R*TT*
+&
+(1.d0+ (4.d0* rho(i,j,k)-2.d0*rho(i,j,k)*rho(i,j,k) )
+& /(1.d0-rho(i,j,k))**3 )
+&
+-a* rho(i,j,k) -1.d0/3.d0)
+&
+/G1 )
+c Yuan C-S EOS
+p(i,j,k) = rho(i,j,k)/3.d0 + G1/6.d0 * psx(i,j,k) *psx(i,j,k)
+endif
+6 continue
+5 continue
+4 continue
+&
+&
+psx_w = sqrt( 6.d0* rho_w * ( R*TT*
+(1.d0+ (4.d0* rho_w-2.d0*rho_w * rho_w )
+/(1.d0- rho_w)**3 )
+
+&
+&
+-a* rho_w -1.d0/3.d0)
+/G1 )
+do 30 z = 1,lz
+do 20 y = 1,ly
+do 10 x = 1,lx
+c.........interaction between neighbouring with periodic boundaries
+Fx(x,y,z) =0.d0
+Fy(x,y,z) =0.d0
+Fz(x,y,z) =0.d0
+if (obst(x,y,z) .eq. 0)
+then
+sum_x = 0.d0
+sum_y = 0.d0
+sum_z = 0.d0
+do 11 k =1, 18
+xp=x+ex(k)
+yp=y+ey(k)
+zp=z+ez(k)
+if(xp .lt. 1) xp = lx
+if(xp .gt. lx) xp =1
+if(yp .lt. 1) yp = ly
+if(yp .gt. ly) yp =1
+if(zp .lt. 1) zp = lz
+if(zp .gt. lz) zp =1
+if (obst(xp,yp,zp) .eq. 1) then
+! Interact with solid nodes (obst=1)
+sum_x = sum_x + t_k(k)*xc(k)
+sum_y = sum_y + t_k(k)*yc(k)
+sum_z = sum_z + t_k(k)*zc(k)
+else
+! Interact with fluid nodes (obst=0)
+Fx(x,y,z)=Fx(x,y,z) +t_k(k)*xc(k)* psx(xp,yp,zp)
+Fy(x,y,z)=Fy(x,y,z) +t_k(k)*yc(k)* psx(xp,yp,zp)
+Fz(x,y,z)=Fz(x,y,z) +t_k(k)*zc(k)* psx(xp,yp,zp)
+endif
+11 continue
+! Final wall-fluid interaction
+Sx(x,y,z) = -G1*sum_x *psx(x,y,z) *psx_w
+Sy(x,y,z) = -G1*sum_y *psx(x,y,z) *psx_w
+Sz(x,y,z) = -G1*sum_z *psx(x,y,z) *psx_w
+! Final fluid-fluid interaction
+Fx (x,y,z)= -G1 *psx (x,y,z)* Fx(x,y,z)
+Fy (x,y,z)= -G1 *psx (x,y,z)* Fy(x,y,z)
+Fz (x,y,z)= -G1 *psx (x,y,z)* Fz(x,y,z)
+endif
+10 continue
+20 continue
+30 continue
+end
+
+
+output.for
+c===================================================
+subroutine write_results2(obst,rho,p,upx,upy,upz, n)
+implicit none
+include "head.inc"
+integer x,y,z,i,n
+real*8 rho(lx,ly,lz),upx(lx,ly,lz),upy(lx,ly,lz)
+real*8 upz(lx,ly,lz), p(lx,ly,lz)
+integer obst(lx,ly,lz)
+character filename*16, B*6
+write(B,’(i6.6)’) n
+filename=’out/3D’//B//’.plt’
+open(41,file=filename)
+write(41,*) ’variables = x, y, z, rho, upx, upy, upz, p, obst’
+write(41,*) ’zone i=’, lx, ’, j=’, ly, ’, k=’, lz, ’, f=point’
+do 10 z = 1, lz
+do 10 y = 1, ly
+do 10 x = 1, lx
+write(41,9) x, y, z, rho(x,y,z),
+& upx(x,y,z), upy(x,y,z), upz(x,y,z),
+& p(x,y,z), obst(x,y,z)
+10 continue
+9
+format(3i4, 5f15.8, i4)
+close(41)
+end
+params.in
+c===============================================
+15.
+! RR droplet radius
+0.12
+! rho_w, density of wall
+1.0
+! tau(1)
+10000
+! maximum time step
+500
+! Nwri: output every Nwri time steps!
+
+

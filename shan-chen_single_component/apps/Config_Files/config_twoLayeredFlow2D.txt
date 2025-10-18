@@ -1,0 +1,32 @@
+# config_twoLayeredFlow2D.txt — Preset A (ratio ~7–8)
+# grid/time
+N           100
+ulb         0.1
+Re          60
+max_t       200.0
+out_freq    500
+vtk_freq    1000
+
+# EOS (Yuan–CS)
+a           1.0
+b           4.0
+R           1.0
+TT0         0.95
+
+# densities (targets for initialization)
+rhol        0.21
+rhog        0.067
+rho_w       0.067   # wet the walls with liquid
+
+# interface shaping
+h_lower     0.30    # fraction of H (0..0.5)
+w_int       4       # interface half-thickness in nodes
+
+# body force (uniform)
+gx          1e-8
+gy          0.0
+Gx_const    0.0
+
+# model coupling (optional override)
+#G          -1.0
+

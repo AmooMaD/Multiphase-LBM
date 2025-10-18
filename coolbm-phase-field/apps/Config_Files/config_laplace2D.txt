@@ -1,0 +1,17 @@
+# Configuration file for selecting parameters for the 2D Rayleigh-Taylor simulation 
+Re                   24.      # Reynolds number
+ulb                  0.04     # Velocity in lattice units
+N                    100      # Number of nodes in x-direction
+max_t                500.0001     # Total time in seconds
+out_freq             500      # Frequency in LU for output of terminal message and profiles (use 0 for no messages)
+data_freq            10        # Frequency in LU of full data dump (use 0 for no data dump)
+vtk_freq             500      # Frequency of data saving in vtk format for post-processing
+phi_l                0.251  #
+phi_g		     0.024  #
+rho_l                0.12    #
+rho_g		     0.12   #
+a                    4.     #
+b                    4.     #
+kappa                5e-4       #
+gravity              0.  #
+

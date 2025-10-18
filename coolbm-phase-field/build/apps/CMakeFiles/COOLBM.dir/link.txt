@@ -1,0 +1,1 @@
+/usr/bin/g++ -std=c++17 -O3 -Wall CMakeFiles/COOLBM.dir/COOLBM.cpp.o -o /home/zadshakm@coria.fr/Desktop/coolbm-phase-field/out/COOLBM  -ltbb 

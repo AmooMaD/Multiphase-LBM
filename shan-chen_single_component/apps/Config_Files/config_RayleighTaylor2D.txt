@@ -1,0 +1,16 @@
+# Configuration file for selecting parameters for the 2D Contact Angle simulation 
+Re              30.72         # Reynolds number
+ulb             0.04       # Velocity in lattice units
+N               128       # Number of nodes in x-direction
+max_t           50.01        # Total time in seconds
+out_freq        100          # Frequency in LU for output of terminal message and profiles (use 0 for no messages)
+
+vtk_freq        100          # Frequency of data saving in vtk format for post-processing
+rhol            1.2       # initial liquid density
+rhog            0.4        # initial gas density
+g 		-5
+rhow		0.2
+a 		1
+b		4
+gravity 	-1.25e-5
+

@@ -1,0 +1,1 @@
+/usr/bin/g++ -std=c++17 -O3 -Wall CMakeFiles/COOLBM.dir/COOLBM.cpp.o -o /home/zadshakm@coria.fr/Desktop/coolbm/shan-chen_single_component/out/COOLBM  -ltbb 

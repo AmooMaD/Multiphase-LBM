@@ -1,0 +1,19 @@
+# Yuan-CS controls
+TT0         0.875       # pick from the table they use (T/T0)
+a           1.0         # Yuan constants
+b           4.0
+R           1.0
+#tau         1.0         # (used here; Re is ignored if tau>0)
+rho_w       0.12        # wall density for wetting (contact angle)
+rhol        0.265       # high-density (pick consistent with TT0)
+rhog        0.038       # low-density  (pick consistent with TT0)
+
+# Numerics / output (unchanged)
+N            100
+ulb          0.01
+Re           6         # ignored if tau>0
+max_t        20.0001
+out_freq     400
+vtk_freq     400
+gravity      0.0
+
